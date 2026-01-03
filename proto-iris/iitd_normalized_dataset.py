@@ -51,3 +51,4 @@ class IITDNormalizedDataset(Dataset):
 
         label = self.labels[idx]
         return img, label
+
