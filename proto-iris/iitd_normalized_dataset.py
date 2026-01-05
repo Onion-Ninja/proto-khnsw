@@ -12,6 +12,8 @@ class IITDNormalizedDataset(Dataset):
             path to normalized npz files
         allowed_classes:
             list of class names (e.g. ['1_L', '1_R', ...])
+        min_samples_per_class:  
+            safety threshold (≥ 5 images)
         """
         self.samples = []
         self.labels = []
@@ -34,7 +36,9 @@ class IITDNormalizedDataset(Dataset):
             for cls, files in class_files.items()
             if len(files) >= min_samples_per_class
         }
-
+        print(f"Total classes: {len(class_files)}")
+        print(f"Valid classes: {len(valid_classes)}")
+        
         self.class_to_idx = {
             cls: i for i, cls in enumerate(sorted(valid_classes.keys()))
         }
