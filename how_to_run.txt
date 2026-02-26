@@ -1,11 +1,25 @@
 python train_iitd_norm.py \
   --dataset_root ~/datasets/iris_db/IITD_v1/worldcoin_outputs_npz/normalized \
-  --classes_per_it_tr 5 \
+  --classes_per_it_tr 50 \
   --num_support_tr 3 \
   --num_query_tr 2 \
-  --classes_per_it_val 5 \
+  --classes_per_it_val 50 \
   --num_support_val 3 \
   --num_query_val 2 \
   --iterations 100 \
-  --epochs 50 \
+  --epochs 10 \
+  --cuda
+
+
+python train_iitd_template.py \
+  --dataset_root ~/datasets/iris_db/IITD_v1/worldcoin_outputs_npz/templates \
+  --classes_per_it_tr 15 \
+  --num_support_tr 3 \
+  --num_query_tr 2 \
+  --classes_per_it_val 15 \
+  --num_support_val 3 \
+  --num_query_val 2 \
+  --iterations 100 \
+  --epochs 10 \
+  --learning_rate 0.001 \
   --cuda
