@@ -157,7 +157,7 @@ def save_metrics(opt, train_loss, train_acc, val_acc, test_acc, dataset_name):
     k = opt.num_support_tr
 
     filename = f"{n}way_{k}shot_{dataset_name}.txt"
-    filepath = f"/content/proto-khnsw/output/trace/{filename}"
+    filepath = f"/content/proto-khnsw/output/{filename}"
 
     with open(filepath, "w") as f:
 
