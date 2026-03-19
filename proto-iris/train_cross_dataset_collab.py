@@ -157,7 +157,7 @@ def save_metrics(opt, train_loss, train_acc, val_acc, test_acc, dataset_name):
     k = opt.num_support_tr
 
     filename = f"{n}way_{k}shot_{dataset_name}.txt"
-    filepath = os.path.join(opt.experiment_root, filename)
+    filepath = f"/content/proto-khnsw/output/trace/{filename}"
 
     with open(filepath, "w") as f:
 
@@ -391,11 +391,11 @@ def main():
 
     # ----------- PATHS (CHANGE THESE) -----------
     IITD_H5 = os.path.expanduser(
-        "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/iitd/templates.h5"
+        "/content/proto-khnsw/datasets/iitd/templates.h5"
     )
 
     CASIA_H5 = os.path.expanduser(
-        "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/casia_iris_thousand/templates.h5"
+        "/content/proto-khnsw/datasets/casia_iris_thousand/templates.h5"
     )
 
     # ----------- SPLITS -----------
