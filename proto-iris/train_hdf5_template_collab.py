@@ -69,7 +69,7 @@ def save_metrics(opt, train_loss, train_acc, val_acc, test_acc, dataset_name):
     k = opt.num_support_tr
 
     filename = f"{n}way_{k}shot_{dataset_name}.txt"
-    filepath = os.path.join(opt.experiment_root, filename)
+    filepath = f"/content/proto-khnsw/output/{filename}"
 
     with open(filepath, "w") as f:
 
@@ -270,7 +270,7 @@ def main():
     # PATHS
 
     CASIA_H5 = os.path.expanduser(
-        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5"
+        "/content/proto-khnsw/datasets/casia_iris_thousand/templates.h5"
     )
 
     print("\nMode: SAME DATASET (CASIA → CASIA)")
@@ -295,7 +295,7 @@ def main():
 
     # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
-    emb_d = 32  #change this for embedding study
+    emb_d = 16  #change this for embedding study
     model = ProtoNet(
         x_dim=2,
         hid_dim=64, 
