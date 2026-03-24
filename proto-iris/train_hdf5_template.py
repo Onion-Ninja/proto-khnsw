@@ -63,6 +63,40 @@ def get_valid_class_splits(hdf5_path, min_samples=5, seed=0):
     return train_classes, val_classes, test_classes
 
 
+def save_metrics(opt, train_loss, train_acc, val_acc, test_acc, dataset_name):
+
+    n = opt.classes_per_it_tr
+    k = opt.num_support_tr
+
+    filename = f"{n}way_{k}shot_{dataset_name}.txt"
+    filepath = os.path.join(opt.experiment_root, filename)
+
+    with open(filepath, "w") as f:
+
+        f.write("==== Experiment Details ====\n")
+        f.write(f"N-way: {n}\n")
+        f.write(f"K-shot: {k}\n")
+        f.write(f"Dataset: {dataset_name}\n")
+        f.write(f"Epochs: {opt.epochs}\n")
+        f.write("\n")
+
+        f.write("==== Training Loss ====\n")
+        for val in train_loss:
+            f.write(f"{val}\n")
+
+        f.write("\n==== Training Accuracy ====\n")
+        for val in train_acc:
+            f.write(f"{val}\n")
+
+        f.write("\n==== Validation Accuracy ====\n")
+        for val in val_acc:
+            f.write(f"{val}\n")
+
+        f.write("\n==== Final Test Accuracy ====\n")
+        f.write(f"{test_acc}\n")
+
+    print(f"\n Metrics saved to: {filepath}")
+
 # ------------------ DATALOADER ------------------
 
 def init_dataloader(hdf5_path, opt, mode, class_splits):
@@ -108,8 +142,9 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
 
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
 
-    train_loss, train_acc = [], []
-    val_acc = []
+    train_loss_list = [] 
+    train_acc_list = []
+    val_acc_list = []
 
     best_acc = 0
     best_state = None
@@ -121,6 +156,9 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
         print(f'=== Epoch: {epoch} ===')
 
         model.train()
+
+        epoch_loss = []
+        epoch_acc = []
 
         for batch in tqdm(tr_loader):
 
@@ -140,12 +178,18 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
             loss.backward()
             optim.step()
 
-            train_loss.append(loss.item())
-            train_acc.append(acc.item())
+            epoch_loss.append(loss.item())
+            epoch_acc.append(acc.item())
+
+        avg_loss = np.mean(epoch_loss)
+        avg_acc = np.mean(epoch_acc)
+
+        train_loss_list.append(avg_loss)
+        train_acc_list.append(avg_acc)
 
         print(
-            f'Avg Train Loss: {np.mean(train_loss[-opt.iterations:]):.4f}, '
-            f'Avg Train Acc: {np.mean(train_acc[-opt.iterations:]):.4f}'
+            f'Avg Train Loss: {np.mean(avg_loss):.4f}, '
+            f'Avg Train Acc: {np.mean(avg_acc ):.4f}'
         )
 
         scheduler.step()
@@ -155,7 +199,7 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
 
             model.eval()
 
-            val_acc.clear()
+            val_acc = []
 
             for batch in val_loader:
 
@@ -173,13 +217,15 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
                 val_acc.append(acc.item())
 
             avg_val_acc = np.mean(val_acc)
+            val_acc_list.append(avg_val_acc)
+
             print(f'Avg Val Acc: {avg_val_acc:.4f}')
 
             if avg_val_acc >= best_acc:
                 best_acc = avg_val_acc
                 best_state = model.state_dict()
 
-    return best_state
+    return best_state, train_loss_list, train_acc_list, val_acc_list
 
 
 # ------------------ TEST ------------------
@@ -192,7 +238,7 @@ def test(opt, test_loader, model):
 
     acc_list = []
 
-    for _ in range(10):
+    for _ in range(20):
 
         for batch in test_loader:
 
@@ -209,8 +255,10 @@ def test(opt, test_loader, model):
 
             acc_list.append(acc.item())
 
-    print(f"\n🔥 Cross-Dataset Test Acc: {np.mean(acc_list):.4f}")
+    final_acc = np.mean(acc_list)
+    print(f"\n🔥 Cross-Dataset Test Acc: {final_acc:.4f}")
 
+    return final_acc
 
 # ------------------ MAIN ------------------
 
@@ -218,70 +266,45 @@ def main():
 
     opt = get_parser().parse_args()
 
-    # Add argument fallback
-    if not hasattr(opt, "train_dataset"):
-        opt.train_dataset = "iitd"
+    # Add embedding dim manually if not in parser
+    if not hasattr(opt, "embedding_dim"):
+        opt.embedding_dim = 64
 
     os.makedirs(opt.experiment_root, exist_ok=True)
 
     init_seed(opt)
 
-    # ---------- DATA PATHS ----------
-    IITD_H5 = "C:/Users/tbmmd/.../iitd/templates.h5"
-    CASIA_H5 = "C:/Users/tbmmd/.../casia_iris_thousand/templates.h5"
+    # ---------- DATA PATH ----------
+    CASIA_H5 = "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/casia_iris_thousand/templates.h5"
 
-    # ---------- MODE ----------
-    if opt.train_dataset == "iitd":
-        TRAIN_H5 = IITD_H5
-        TEST_H5 = CASIA_H5
-        print("\nMode: Train on IITD → Test on CASIA")
-    else:
-        TRAIN_H5 = CASIA_H5
-        TEST_H5 = IITD_H5
-        print("\nMode: Train on CASIA → Test on IITD")
+    print("\nMode: SAME DATASET (CASIA → CASIA)")
 
     # ---------- SPLITS ----------
-    train_cls, val_cls, _ = get_valid_class_splits(
-        TRAIN_H5,
+    train_cls, val_cls, test_cls = get_valid_class_splits(
+        CASIA_H5,
         min_samples=5,
         seed=opt.manual_seed
     )
 
     class_splits = {
         "train": train_cls,
-        "val": val_cls
+        "val": val_cls,
+        "test": test_cls
     }
 
-    # ---------- TRAIN LOADERS ----------
-    tr_loader = init_dataloader(TRAIN_H5, opt, "train", class_splits)
-    val_loader = init_dataloader(TRAIN_H5, opt, "val", class_splits)
-
-    # ---------- TEST LOADER ----------
-    print("\nLoading cross-dataset test set...")
-
-    test_dataset = IrisTemplateHDF5Dataset(
-        hdf5_path=TEST_H5,
-        allowed_classes=None,
-        min_samples_per_class=5
-    )
-
-    test_sampler = PrototypicalBatchSampler(
-        labels=test_dataset.y,
-        classes_per_it=opt.classes_per_it_val,
-        num_samples=opt.num_support_val + opt.num_query_val,
-        iterations=opt.iterations
-    )
-
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_sampler=test_sampler,
-        pin_memory=True
-    )
+    # ---------- LOADERS ----------
+    tr_loader = init_dataloader(CASIA_H5, opt, "train", class_splits)
+    val_loader = init_dataloader(CASIA_H5, opt, "val", class_splits)
+    test_loader = init_dataloader(CASIA_H5, opt, "test", class_splits)
 
     # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
 
-    model = ProtoNet(x_dim=2).to(device)
+    model = ProtoNet(
+        x_dim=2,
+        hid_dim=64,
+        z_dim=opt.embedding_dim   # 🔥 IMPORTANT
+    ).to(device)
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
 
@@ -292,14 +315,28 @@ def main():
     )
 
     # ---------- TRAIN ----------
-    best_state = train(opt, tr_loader, model, optim, scheduler, val_loader)
+    best_state, train_loss, train_acc, val_acc = train(
+        opt, tr_loader, model, optim, scheduler, val_loader
+    )
 
     # ---------- TEST ----------
-    print("\n🔥 Running Cross-Dataset Evaluation...")
+    print("\n🔥 Testing on CASIA (Same Dataset)...")
 
     model.load_state_dict(best_state)
 
-    test(opt, test_loader, model)
+    test_acc = test(opt, test_loader, model)
+
+    # ---------- SAVE ----------
+    dataset_name = f"casia_dim{opt.embedding_dim}"
+
+    save_metrics(
+        opt,
+        train_loss,
+        train_acc,
+        val_acc,
+        test_acc,
+        dataset_name
+    )
 
 
 if __name__ == "__main__":

@@ -322,7 +322,7 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader):
 
         print(f"Val Acc: {avg_val:.4f}")
 
-        if avg_val > best_acc:
+        if avg_val >= best_acc:
             best_acc = avg_val
             best_state = model.state_dict()
 
