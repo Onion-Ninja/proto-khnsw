@@ -391,23 +391,23 @@ def main():
 
     # ----------- PATHS (CHANGE THESE) -----------
     IITD_H5 = os.path.expanduser(
-        "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/iitd/templates.h5"
+        "~/datasets/iris_db/IITD_v1/worldcoin_outputs_npz/templates.h5"
     )
 
     CASIA_H5 = os.path.expanduser(
-        "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/casia_iris_thousand/templates.h5"
+        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5"
     )
 
     # ----------- SPLITS -----------
-    train_cls, val_cls = get_hdf5_splits(IITD_H5)
+    train_cls, val_cls = get_hdf5_splits(CASIA_H5)
 
     # ----------- LOADERS -----------
-    tr_loader = get_loader(IITD_H5, train_cls, opt, "train")
-    val_loader = get_loader(IITD_H5, val_cls, opt, "val")
+    tr_loader = get_loader(CASIA_H5, train_cls, opt, "train")
+    val_loader = get_loader(CASIA_H5, val_cls, opt, "val")
 
     # TEST = ALL CLASSES (CASIA)
     test_dataset = IrisHDF5Dataset(
-        hdf5_path=CASIA_H5,
+        hdf5_path=IITD_H5,
         allowed_classes=None,
         min_samples_per_class=5
     )
@@ -444,11 +444,11 @@ def main():
 
 
     # ----------- TEST -----------
-    print("\nTesting on CASIA (cross-dataset)...")
+    print("\nTesting on IITD (cross-dataset)...")
     model.load_state_dict(best_state)
     test_acc = test(opt, test_loader, model)
 
-    dataset_name = "iitd_to_casia"   # you can make this dynamic later
+    dataset_name = "casia_to_iitd"   # you can make this dynamic later
 
     save_metrics(
         opt,
