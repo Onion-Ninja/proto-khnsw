@@ -39,10 +39,10 @@ python train_iitd_template.py \
 
   python train_hdf5_template.py \
 --dataset_root ~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5 \
---classes_per_it_tr 5 \
+--classes_per_it_tr 20 \
 --num_support_tr 3 \
 --num_query_tr 2 \
---classes_per_it_val 5 \
+--classes_per_it_val 20 \
 --num_support_val 3 \
 --num_query_val 2 \
 --iterations 100 \
@@ -66,3 +66,6 @@ python proto-iris/train_cross_dataset.py --classes_per_it_tr 5 --num_support_tr 
 python proto-iris/train_hdf5_template.py --dataset_root ./datasets/casia_iris_thousand/templates.h5 --classes_per_it_tr 5 --num_support_tr 3 --num_query_tr 2 --classes_per_it_val 5 --num_support_val 3 --num_query_val 2 --iterations 100 --epochs 20 --learning_rate 0.001 --cuda
 
 python proto-iris/train_hdf5_template.py --dataset_root ./datasets/iitd/templates.h5 --classes_per_it_tr 5 --num_support_tr 3 --num_query_tr 2 --classes_per_it_val 5 --num_support_val 3 --num_query_val 2 --iterations 100 --epochs 20 --learning_rate 0.001 --cuda
+
+# Embedding study
+python train_hdf5_template.py --classes_per_it_tr 20 --num_support_tr 3 --num_query_tr 2 --cuda

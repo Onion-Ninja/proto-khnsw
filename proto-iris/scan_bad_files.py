@@ -25,6 +25,7 @@ print(f"Found {len(bad_files)} corrupted files")
 i =1
 for bf in bad_files:
     print(f"{i} : {bf}")
+    
 # # Optional: delete them
 # for f in bad_files:
 #     print("Removing:", f)

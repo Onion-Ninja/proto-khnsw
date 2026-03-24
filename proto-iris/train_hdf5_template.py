@@ -265,17 +265,13 @@ def test(opt, test_loader, model):
 def main():
 
     opt = get_parser().parse_args()
-
-    # Add embedding dim manually if not in parser
-    if not hasattr(opt, "embedding_dim"):
-        opt.embedding_dim = 64
-
-    os.makedirs(opt.experiment_root, exist_ok=True)
-
     init_seed(opt)
 
-    # ---------- DATA PATH ----------
-    CASIA_H5 = "C:/Users/tbmmd/OneDrive/Desktop/10th Sem/mtp/datasets/casia_iris_thousand/templates.h5"
+    # PATHS
+
+    CASIA_H5 = os.path.expanduser(
+        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5"
+    )
 
     print("\nMode: SAME DATASET (CASIA → CASIA)")
 
@@ -299,11 +295,11 @@ def main():
 
     # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
-
+    emb_d = 16  #change this for embedding study
     model = ProtoNet(
         x_dim=2,
-        hid_dim=64,
-        z_dim=opt.embedding_dim
+        hid_dim=64, 
+        z_dim=emb_d     #change this for embedding study
     ).to(device)
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
@@ -320,14 +316,14 @@ def main():
     )
 
     # ---------- TEST ----------
-    print("\n🔥 Testing on CASIA (Same Dataset)...")
+    print("\n Testing on CASIA (Same Dataset)...")
 
     model.load_state_dict(best_state)
 
     test_acc = test(opt, test_loader, model)
 
     # ---------- SAVE ----------
-    dataset_name = f"casia_dim{opt.embedding_dim}"
+    dataset_name = f"casia_dim{emb_d}"
 
     save_metrics(
         opt,
