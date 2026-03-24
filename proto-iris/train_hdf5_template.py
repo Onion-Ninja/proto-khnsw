@@ -303,7 +303,7 @@ def main():
     model = ProtoNet(
         x_dim=2,
         hid_dim=64,
-        z_dim=opt.embedding_dim   # 🔥 IMPORTANT
+        z_dim=opt.embedding_dim
     ).to(device)
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
