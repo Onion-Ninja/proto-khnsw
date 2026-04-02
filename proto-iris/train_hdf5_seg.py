@@ -1,4 +1,5 @@
-# coding=utf-8
+
+from torch.utils.data import Dataset
 from __future__ import print_function
 import sys
 import os
@@ -15,16 +16,60 @@ from src.prototypical_loss import prototypical_loss as loss_fn
 from src.protonet import ProtoNet
 from src.parser_util import get_parser
 
-# from iris_hdf5_dataset import IrisTemplateHDF5Dataset
-from train_cross_dataset import IrisHDF5Dataset
+class IrisSegmentationHDF5Dataset(Dataset):
 
-# ------------------ SEED ------------------
+    def __init__(self, hdf5_path, allowed_classes=None, min_samples_per_class=5):
 
-def init_seed(opt):
-    torch.backends.cudnn.enabled = False
-    np.random.seed(opt.manual_seed)
-    torch.manual_seed(opt.manual_seed)
-    torch.cuda.manual_seed(opt.manual_seed)
+        with h5py.File(hdf5_path, "r") as f:
+            seg_maps = f["segmentation_maps"][:]   # (N,240,320,4)
+            labels = f["labels"][:]
+
+        labels = [l.decode() if isinstance(l, bytes) else str(l) for l in labels]
+
+        class_dict = defaultdict(list)
+
+        for i, lbl in enumerate(labels):
+            class_dict[lbl].append(i)
+
+        valid_classes = [
+            cls for cls, idxs in class_dict.items()
+            if len(idxs) >= min_samples_per_class
+        ]
+
+        if allowed_classes is not None:
+            allowed_classes = set(allowed_classes)
+            valid_classes = [cls for cls in valid_classes if cls in allowed_classes]
+
+        self.class_to_idx = {
+            cls: i for i, cls in enumerate(sorted(valid_classes))
+        }
+
+        self.data = []
+
+        for cls in valid_classes:
+            for idx in class_dict[cls]:
+                self.data.append(
+                    (seg_maps[idx], self.class_to_idx[cls])
+                )
+
+        self.y = np.array([label for _, label in self.data])
+
+        print(f"== Segmentation Dataset: {len(valid_classes)} classes, {len(self.data)} samples")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+
+        seg, label = self.data[idx]
+
+        seg = seg.astype(np.float32)
+
+        # (240,320,4) → (4,240,320)
+        seg = np.transpose(seg, (2, 0, 1))
+
+        return torch.from_numpy(seg), label
+    
 
 
 # ------------------ SEED ------------------
@@ -72,40 +117,6 @@ def get_valid_class_splits(hdf5_path, min_samples=5, seed=0):
     return train_classes, val_classes, test_classes
 
 
-def save_metrics(opt, train_loss, train_acc, val_acc, test_acc, dataset_name):
-
-    n = opt.classes_per_it_tr
-    k = opt.num_support_tr
-
-    filename = f"{n}way_{k}shot_{dataset_name}.txt"
-    filepath = os.path.join(opt.experiment_root, filename)
-
-    with open(filepath, "w") as f:
-
-        f.write("==== Experiment Details ====\n")
-        f.write(f"N-way: {n}\n")
-        f.write(f"K-shot: {k}\n")
-        f.write(f"Dataset: {dataset_name}\n")
-        f.write(f"Epochs: {opt.epochs}\n")
-        f.write("\n")
-
-        f.write("==== Training Loss ====\n")
-        for val in train_loss:
-            f.write(f"{val}\n")
-
-        f.write("\n==== Training Accuracy ====\n")
-        for val in train_acc:
-            f.write(f"{val}\n")
-
-        f.write("\n==== Validation Accuracy ====\n")
-        for val in val_acc:
-            f.write(f"{val}\n")
-
-        f.write("\n==== Final Test Accuracy ====\n")
-        f.write(f"{test_acc}\n")
-
-    print(f"\n Metrics saved to: {filepath}")
-
 # ------------------ DATALOADER ------------------
 
 def init_dataloader(hdf5_path, opt, mode, class_splits):
@@ -125,7 +136,8 @@ def init_dataloader(hdf5_path, opt, mode, class_splits):
         classes_per_it = opt.classes_per_it_val
         num_samples = opt.num_support_val + opt.num_query_val
 
-    dataset = IrisHDF5Dataset(
+    # 🔥 CHANGE HERE
+    dataset = IrisSegmentationHDF5Dataset(
         hdf5_path=hdf5_path,
         allowed_classes=classes,
         min_samples_per_class=5
@@ -151,23 +163,14 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
 
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
 
-    train_loss_list = [] 
-    train_acc_list = []
-    val_acc_list = []
-
     best_acc = 0
     best_state = None
-
-    print("Training on device →", device)
 
     for epoch in range(opt.epochs):
 
         print(f'=== Epoch: {epoch} ===')
 
         model.train()
-
-        epoch_loss = []
-        epoch_acc = []
 
         for batch in tqdm(tr_loader):
 
@@ -187,54 +190,9 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
             loss.backward()
             optim.step()
 
-            epoch_loss.append(loss.item())
-            epoch_acc.append(acc.item())
-
-        avg_loss = np.mean(epoch_loss)
-        avg_acc = np.mean(epoch_acc)
-
-        train_loss_list.append(avg_loss)
-        train_acc_list.append(avg_acc)
-
-        print(
-            f'Avg Train Loss: {np.mean(avg_loss):.4f}, '
-            f'Avg Train Acc: {np.mean(avg_acc ):.4f}'
-        )
-
         scheduler.step()
 
-        # ---------- VALIDATION ----------
-        if val_loader is not None:
-
-            model.eval()
-
-            val_acc = []
-
-            for batch in val_loader:
-
-                x, y = batch
-                x, y = x.to(device), y.to(device)
-
-                embeddings = model(x)
-
-                _, acc = loss_fn(
-                    embeddings,
-                    target=y,
-                    n_support=opt.num_support_val
-                )
-
-                val_acc.append(acc.item())
-
-            avg_val_acc = np.mean(val_acc)
-            val_acc_list.append(avg_val_acc)
-
-            print(f'Avg Val Acc: {avg_val_acc:.4f}')
-
-            if avg_val_acc >= best_acc:
-                best_acc = avg_val_acc
-                best_state = model.state_dict()
-
-    return best_state, train_loss_list, train_acc_list, val_acc_list
+    return model.state_dict()
 
 
 # ------------------ TEST ------------------
@@ -244,7 +202,6 @@ def test(opt, test_loader, model):
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
 
     model.eval()
-
     acc_list = []
 
     for _ in range(20):
@@ -264,10 +221,8 @@ def test(opt, test_loader, model):
 
             acc_list.append(acc.item())
 
-    final_acc = np.mean(acc_list)
-    print(f"\nSame dataset Test Acc: {final_acc:.4f}")
+    print(f"\nTest Acc: {np.mean(acc_list):.4f}")
 
-    return final_acc
 
 # ------------------ MAIN ------------------
 
@@ -276,20 +231,12 @@ def main():
     opt = get_parser().parse_args()
     init_seed(opt)
 
-    # PATHS
-
-    CASIA_H5 = os.path.expanduser(
-        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5"
+    # 🔥 CHANGE: segmentation HDF5
+    H5_PATH = os.path.expanduser(
+        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/segmentation.h5"
     )
 
-    print("\nMode: SAME DATASET (CASIA → CASIA)")
-
-    # ---------- SPLITS ----------
-    train_cls, val_cls, test_cls = get_valid_class_splits(
-        CASIA_H5,
-        min_samples=5,
-        seed=opt.manual_seed
-    )
+    train_cls, val_cls, test_cls = get_valid_class_splits(H5_PATH)
 
     class_splits = {
         "train": train_cls,
@@ -297,18 +244,17 @@ def main():
         "test": test_cls
     }
 
-    # ---------- LOADERS ----------
-    tr_loader = init_dataloader(CASIA_H5, opt, "train", class_splits)
-    val_loader = init_dataloader(CASIA_H5, opt, "val", class_splits)
-    test_loader = init_dataloader(CASIA_H5, opt, "test", class_splits)
+    tr_loader = init_dataloader(H5_PATH, opt, "train", class_splits)
+    val_loader = init_dataloader(H5_PATH, opt, "val", class_splits)
+    test_loader = init_dataloader(H5_PATH, opt, "test", class_splits)
 
-    # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
-    emb_d = 1024  #change this for embedding study
+
+    # 🔥 CHANGE: 4 channels
     model = ProtoNet(
-        x_dim=2,
-        hid_dim=64, 
-        z_dim=emb_d     #change this for embedding study
+        x_dim=4,
+        hid_dim=64,
+        z_dim=64
     ).to(device)
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
@@ -319,29 +265,9 @@ def main():
         step_size=opt.lr_scheduler_step
     )
 
-    # ---------- TRAIN ----------
-    best_state, train_loss, train_acc, val_acc = train(
-        opt, tr_loader, model, optim, scheduler, val_loader
-    )
+    train(opt, tr_loader, model, optim, scheduler, val_loader)
 
-    # ---------- TEST ----------
-    print("\n Testing on CASIA (Same Dataset)...")
-
-    model.load_state_dict(best_state)
-
-    test_acc = test(opt, test_loader, model)
-
-    # ---------- SAVE ----------
-    dataset_name = f"casia_dim{emb_d}"
-
-    save_metrics(
-        opt,
-        train_loss,
-        train_acc,
-        val_acc,
-        test_acc,
-        dataset_name
-    )
+    test(opt, test_loader, model)
 
 
 if __name__ == "__main__":

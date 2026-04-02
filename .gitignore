@@ -1,6 +1,8 @@
 # Custom
 dataset/
 output/
+
+mongo_creds.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

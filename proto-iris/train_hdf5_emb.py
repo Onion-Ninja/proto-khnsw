@@ -304,44 +304,49 @@ def main():
 
     # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
-    emb_d = 1024  #change this for embedding study
-    model = ProtoNet(
-        x_dim=2,
-        hid_dim=64, 
-        z_dim=emb_d     #change this for embedding study
-    ).to(device)
+    embedding_dimensions = [16, 32, 64, 128, 256, 512, 1024]
 
-    optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
+    for emb_d in embedding_dimensions:
 
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optim,
-        gamma=opt.lr_scheduler_gamma,
-        step_size=opt.lr_scheduler_step
-    )
+        print(f"\n\n=== Training with Embedding Dimension: {emb_d} ===")
 
-    # ---------- TRAIN ----------
-    best_state, train_loss, train_acc, val_acc = train(
-        opt, tr_loader, model, optim, scheduler, val_loader
-    )
+        model = ProtoNet(
+            x_dim=2,
+            hid_dim=64, 
+            z_dim=emb_d     #change this for embedding study
+        ).to(device)
+
+        optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
+
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optim,
+            gamma=opt.lr_scheduler_gamma,
+            step_size=opt.lr_scheduler_step
+        )
+
+        # ---------- TRAIN ----------
+        best_state, train_loss, train_acc, val_acc = train(
+            opt, tr_loader, model, optim, scheduler, val_loader
+        )
 
     # ---------- TEST ----------
-    print("\n Testing on CASIA (Same Dataset)...")
+        print(f"\n Testing on {CASIA_H5}...")
 
-    model.load_state_dict(best_state)
+        model.load_state_dict(best_state)
 
-    test_acc = test(opt, test_loader, model)
+        test_acc = test(opt, test_loader, model)
 
-    # ---------- SAVE ----------
-    dataset_name = f"casia_dim{emb_d}"
+        # ---------- SAVE ----------
+        dataset_name = f"casia_dim{emb_d}"
 
-    save_metrics(
-        opt,
-        train_loss,
-        train_acc,
-        val_acc,
-        test_acc,
-        dataset_name
-    )
+        save_metrics(
+            opt,
+            train_loss,
+            train_acc,
+            val_acc,
+            test_acc,
+            dataset_name
+        )
 
 
 if __name__ == "__main__":

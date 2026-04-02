@@ -15,9 +15,10 @@ from src.prototypical_loss import prototypical_loss as loss_fn
 from src.protonet import ProtoNet
 from src.parser_util import get_parser
 
-from iris_hdf5_dataset import IrisTemplateHDF5Dataset
+# from iris_hdf5_dataset import IrisTemplateHDF5Dataset
 
-
+from train_cross_dataset import IrisHDF5Dataset
+    
 # ------------------ SEED ------------------
 
 def init_seed(opt):
@@ -116,7 +117,7 @@ def init_dataloader(hdf5_path, opt, mode, class_splits):
         classes_per_it = opt.classes_per_it_val
         num_samples = opt.num_support_val + opt.num_query_val
 
-    dataset = IrisTemplateHDF5Dataset(
+    dataset = IrisHDF5Dataset(
         hdf5_path=hdf5_path,
         allowed_classes=classes,
         min_samples_per_class=5
