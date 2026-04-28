@@ -7,6 +7,7 @@ import torch
 import h5py
 from tqdm import tqdm
 from collections import defaultdict
+from torch.utils.data import Dataset
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -15,8 +16,66 @@ from src.prototypical_loss import prototypical_loss as loss_fn
 from src.protonet import ProtoNet
 from src.parser_util import get_parser
 
-# from iris_hdf5_dataset import IrisTemplateHDF5Dataset
-from train_cross_dataset import IrisHDF5Dataset
+class IrisFvHDF5Dataset(Dataset):
+
+    def __init__(self, hdf5_path, allowed_classes=None, min_samples_per_class=5):
+
+        with h5py.File(hdf5_path, "r") as f:
+            fv = f["fv"][:]           # (N, 8, 256)
+            labels = f["labels"][:]
+
+        labels = [l.decode() if isinstance(l, bytes) else str(l) for l in labels]
+
+        class_dict = defaultdict(list)
+
+        for i, lbl in enumerate(labels):
+            class_dict[lbl].append(i)
+
+        valid_classes = [
+            cls for cls, idxs in class_dict.items()
+            if len(idxs) >= min_samples_per_class
+        ]
+
+        if allowed_classes is not None:
+            allowed_classes = set(allowed_classes)
+            valid_classes = [cls for cls in valid_classes if cls in allowed_classes]
+
+        self.class_to_idx = {
+            cls: i for i, cls in enumerate(sorted(valid_classes))
+        }
+
+        self.data = []
+
+        for cls in valid_classes:
+            for idx in class_dict[cls]:
+                self.data.append(
+                    (fv[idx], self.class_to_idx[cls])
+                )
+
+        self.y = np.array([label for _, label in self.data])
+
+        print(f"== FV Dataset: {len(valid_classes)} classes, {len(self.data)} samples")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+
+        fv, label = self.data[idx]
+
+        fv = fv.astype(np.float32)
+
+        assert fv.shape == (8, 256)
+
+        # reshape
+        fv = fv.reshape(16, 128)
+
+        # add channel
+        fv = np.expand_dims(fv, axis=0)
+
+        return torch.from_numpy(fv), label
+
+
 
 # ------------------ SEED ------------------
 
@@ -125,7 +184,7 @@ def init_dataloader(hdf5_path, opt, mode, class_splits):
         classes_per_it = opt.classes_per_it_val
         num_samples = opt.num_support_val + opt.num_query_val
 
-    dataset = IrisHDF5Dataset(
+    dataset = IrisFvHDF5Dataset(
         hdf5_path=hdf5_path,
         allowed_classes=classes,
         min_samples_per_class=5
@@ -151,6 +210,7 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
 
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
 
+    best_epoch =-1
     train_loss_list = [] 
     train_acc_list = []
     val_acc_list = []
@@ -233,7 +293,8 @@ def train(opt, tr_loader, model, optim, scheduler, val_loader=None):
             if avg_val_acc >= best_acc:
                 best_acc = avg_val_acc
                 best_state = model.state_dict()
-
+                best_epoch = epoch
+    print(f"\nBest Val Acc: {best_acc:.4f} at epoch {best_epoch}")
     return best_state, train_loss_list, train_acc_list, val_acc_list
 
 
@@ -278,19 +339,15 @@ def main():
 
     # PATHS
 
-    CASIA_H5 = os.path.expanduser(
-        "~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5"
+    SYN_H5 = os.path.expanduser(
+        "~/dd/k-proto-hnsw/datasets/iris_syn/templates.h5"
     )
 
-    IITD_H5 = os.path.expanduser(
-        "~/datasets/iris_db/IITD_v1/worldcoin_outputs_npz/templates.h5"
-    )
-
-    print("\nMode: SAME DATASET (CASIA → CASIA)")
+    print("\nMode: SAME DATASET (SYN -> SYN)")
 
     # ---------- SPLITS ----------
     train_cls, val_cls, test_cls = get_valid_class_splits(
-        IITD_H5,
+        SYN_H5,
         min_samples=5,
         seed=opt.manual_seed
     )
@@ -302,15 +359,15 @@ def main():
     }
 
     # ---------- LOADERS ----------
-    tr_loader = init_dataloader(IITD_H5, opt, "train", class_splits)
-    val_loader = init_dataloader(IITD_H5, opt, "val", class_splits)
-    test_loader = init_dataloader(IITD_H5, opt, "test", class_splits)
+    tr_loader = init_dataloader(SYN_H5, opt, "train", class_splits)
+    val_loader = init_dataloader(SYN_H5, opt, "val", class_splits)
+    test_loader = init_dataloader(SYN_H5, opt, "test", class_splits)
 
     # ---------- MODEL ----------
     device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
-    emb_d = 64  #change this for embedding study
+    emb_d = 64
     model = ProtoNet(
-        x_dim=2,
+        x_dim=1,
         hid_dim=64, 
         z_dim=emb_d     #change this for embedding study
     ).to(device)
@@ -329,14 +386,14 @@ def main():
     )
 
     # ---------- TEST ----------
-    print("\n Testing on CASIA (Same Dataset)...")
+    print("\n Testing on SYN (Same Dataset)...")
 
     model.load_state_dict(best_state)
 
     test_acc = test(opt, test_loader, model)
 
     # ---------- SAVE ----------
-    dataset_name = f"iitd"
+    dataset_name = f"syn"
 
     save_metrics(
         opt,

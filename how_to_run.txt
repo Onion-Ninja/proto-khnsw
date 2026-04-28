@@ -38,15 +38,15 @@ python train_iitd_template.py \
   --cuda
 
   python train_hdf5_template.py \
---dataset_root ~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5 \
+--dataset_root ~/datasets/iris_db/IITD_v1/worldcoin_outputs_npz/templates.h5 \
 --classes_per_it_tr 5 \
---num_support_tr 3 \
---num_query_tr 2 \
+--num_support_tr 1 \
+--num_query_tr 3 \
 --classes_per_it_val 5 \
---num_support_val 3 \
---num_query_val 2 \
+--num_support_val 1 \
+--num_query_val 3 \
 --iterations 100 \
---epochs 5 \
+--epochs 20 \
 --cuda
 
 python train_cross_dataset.py \
@@ -72,6 +72,19 @@ python train_hdf5_template.py --classes_per_it_tr 20 --num_support_tr 3 --num_qu
 
 python train_hdf5_norm.py \
 --dataset_root ~/datasets/iris_db/CASIA_iris_thousand/worldcoin_outputs_npz/templates.h5 \
+--classes_per_it_tr 5 \
+--num_support_tr 3 \
+--num_query_tr 2 \
+--classes_per_it_val 5 \
+--num_support_val 3 \
+--num_query_val 2 \
+--iterations 100 \
+--epochs 20 \
+--cuda
+
+#iris syn
+python train_hdf5_template_syn.py \
+--dataset_root ~/dd/k-proto-hnsw/datasets/iris_syn/templates.h5 \
 --classes_per_it_tr 5 \
 --num_support_tr 3 \
 --num_query_tr 2 \
